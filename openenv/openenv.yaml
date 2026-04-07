@@ -1,0 +1,98 @@
+id: "openenv_v2_yaml"
+name: "IoT-Sensor-Maintenance"
+version: "2.0.0"
+framework: "OpenEnv"
+
+description: >
+  An advanced OpenEnv-compliant FastAPI environment for intelligent IoT sensor maintenance.
+  Agents must infer hidden fault types under uncertainty and select cost-effective actions 
+  (reboot, calibrate, ignore) to restore system health. The environment introduces ambiguity, 
+  action costs, multi-step fault resolution, and time penalties to simulate real-world decision-making.
+
+maintainer: "Nivetha <nivethaselvam2411@gmail.com>"
+license: "Apache-2.0"
+
+server:
+  implementation: "fastapi"
+  module: "app:app"
+  port: 7860
+  endpoints:
+    - method: POST
+      path: /reset
+      description: Initialize environment with selected difficulty and optional seed.
+    - method: POST
+      path: /step
+      description: Apply an action and receive updated observation, reward, and done flag.
+    - method: GET
+      path: /state
+      description: Retrieve current environment state and metrics.
+
+spec:
+  action:
+    fields:
+      - name: sensor_id
+        type: string
+        description: Target sensor identifier
+      - name: command
+        type: enum
+        values: ["reboot", "calibrate", "ignore"]
+        description: Maintenance action (cost-aware decision required)
+
+  observation:
+    fields:
+      - name: sensors
+        type: object
+        additionalProperties: number
+        description: Noisy and ambiguous sensor readings (fault type is hidden)
+      - name: status_message
+        type: string
+        description: Summary of last action and environment response
+      - name: step_count
+        type: number
+        description: Number of steps taken in current episode
+
+  reward:
+    fields:
+      - name: value
+        type: number
+        range: [0.0, 1.0]
+        description: Reward after applying action (includes cost, penalties, and progress)
+      - name: reason
+        type: string
+        description: Explanation (correct fix, partial fix, wrong action, penalty, etc.)
+
+tasks:
+  - id: easy
+    description: >
+      Single sensor with a hidden fault (e.g., stuck). Sensor readings are ambiguous.
+      Agent must infer correct action with minimal steps.
+    reward:
+      shaping: >
+        Positive reward for correct fix. Includes action cost and time penalty.
+
+  - id: medium
+    description: >
+      Multiple sensors with drift faults. Requires identifying correct actions across sensors.
+      Noisy readings introduce uncertainty.
+    reward:
+      shaping: >
+        Partial rewards for each correct fix. Penalizes inefficient or unnecessary actions.
+
+  - id: hard
+    description: >
+      Mixed fault types including stuck, drift, and multi-step noise faults.
+      Some faults require repeated actions. Includes stochastic behavior and dependencies.
+    reward:
+      shaping: >
+        Reward balances correctness, efficiency, and cost. Encourages strategic planning.
+
+observability:
+  metrics:
+    - name: total_issues
+    - name: fixed_issues
+    - name: remaining_issues
+
+runtime:
+  docker:
+    port: 7860
+    command: "uvicorn app:app --host 0.0.0.0 --port 7860"
